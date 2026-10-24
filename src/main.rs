@@ -3,6 +3,7 @@ mod dns;
 mod error;
 mod net;
 mod state_machine;
+mod web_portal;
 // End mods
 
 use std::time::Duration;
@@ -13,7 +14,10 @@ use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 
 use net::wifi::WifiManager;
 
-use crate::state_machine::app_context::{AppContext, AppMode};
+use crate::{
+    state_machine::app_context::{AppContext, AppMode},
+    web_portal::server::Server,
+};
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -28,6 +32,8 @@ fn main() -> anyhow::Result<()> {
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
 
+    let mut server = Server::new();
+
     let mut ctx = AppContext::new();
     let ssid = "balming";
     let pass = "12345678";
@@ -40,6 +46,8 @@ fn main() -> anyhow::Result<()> {
         log::info!("STA Failed -> Setup portal");
         ctx.setup_portal(&mut wifi, ssid, pass)?;
     }
+
+    server.setup_web()?;
 
     loop {
         match ctx.mode {

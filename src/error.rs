@@ -14,4 +14,6 @@ pub enum AppError {
     DnsHijack,
     #[error("Not in portal mode")]
     NotInPortalMode,
+    #[error("Register route {0}")]
+    RegisterRoute(String),
 }

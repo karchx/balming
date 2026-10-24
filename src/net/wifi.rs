@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use esp_idf_hal::modem::Modem;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::http::server::{Configuration as HttpConfig, EspHttpServer};
 use esp_idf_svc::http::Method;
-use esp_idf_svc::io::Write;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{
     AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi,
@@ -143,24 +141,12 @@ impl<'a> WifiManager<'a> {
         let hijack = Hijack::new(ap_ip, Arc::clone(&self.portal_active));
         self.dns_handle = Some(hijack.start_dns_hijack());
 
-        let mut server = match EspHttpServer::new(&HttpConfig::default()) {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(AppError::DnsHijack);
-            }
-        };
-
-        server.fn_handler("/index.html", Method::Get, |request| {
-            request
-                .into_ok_response()?
-                .write_all(b"<html><body>Hello world!</body></html>")
-        })?;
-
         Ok(())
     }
 
     pub fn stop_portal(&mut self) -> Result<(), AppError> {
         self.portal_active.store(false, Ordering::SeqCst);
+
         if let Some(handle) = self.dns_handle.take() {
             let _ = handle.join();
         }

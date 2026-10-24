@@ -4,8 +4,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use crate::error::AppError;
-
 fn build_dns_response(query: &[u8], ap_ip: Ipv4Addr) -> Option<Vec<u8>> {
     if query.len() < 12 {
         return None;
