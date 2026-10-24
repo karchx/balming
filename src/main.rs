@@ -32,21 +32,19 @@ fn main() -> anyhow::Result<()> {
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
 
-    let mut server = Server::new();
-
     let mut ctx = AppContext::new();
     let ssid = "balming";
     let pass = "12345678";
     let connect = wifi.try_connect_sta(ssid, pass, Duration::from_secs(20))?;
     if connect {
         log::info!("Wifi OK");
-        ctx.mode = AppMode::Running;
-        return Ok(());
+        ctx.transition_to_running(&mut wifi)?;
     } else {
         log::info!("STA Failed -> Setup portal");
         ctx.setup_portal(&mut wifi, ssid, pass)?;
     }
 
+    let mut server = Server::new();
     server.setup_web()?;
 
     loop {
@@ -54,12 +52,12 @@ fn main() -> anyhow::Result<()> {
             AppMode::Setup => {
                 if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
                     if wifi
-                        .try_connect_sta_while(ssid, pass, Duration::from_secs(20))
+                        .try_connect_sta_while(ssid, pass, Duration::from_secs(15))
                         .unwrap_or(false)
                     {
                         log::info!("STA OK -> Stop portal");
                         wifi.stop_portal()?;
-                        ctx.mode = AppMode::Running;
+                        ctx.transition_to_running(&mut wifi)?;
                     }
                     ctx.last_sta_retry = embassy_time::Instant::now();
                 }

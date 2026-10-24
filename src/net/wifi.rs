@@ -1,3 +1,4 @@
+use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -5,7 +6,6 @@ use std::time::Duration;
 
 use esp_idf_hal::modem::Modem;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::http::Method;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{
     AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi,
@@ -66,6 +66,9 @@ impl<'a> WifiManager<'a> {
         {
             Ok(()) => {
                 self.wifi.wait_netif_up()?;
+
+                let ip = self.get_sta_ip().map_err(|_| AppError::GetIp)?;
+                log::info!("HTTP server at http://{}", ip);
                 Ok(true)
             }
             Err(_) => {
@@ -111,6 +114,9 @@ impl<'a> WifiManager<'a> {
         {
             Ok(()) => {
                 self.wifi.wait_netif_up()?;
+
+                let ip = self.get_sta_ip().map_err(|_| AppError::GetIp)?;
+                log::info!("HTTP server at http://{}", ip);
                 Ok(true)
             }
             Err(_) => {
@@ -137,7 +143,7 @@ impl<'a> WifiManager<'a> {
         self.wifi.start()?;
 
         self.portal_active.store(true, Ordering::SeqCst);
-        let ap_ip = self.wifi.wifi().ap_netif().get_ip_info()?.ip;
+        let ap_ip = self.get_ip().map_err(|_| AppError::GetIp)?;
         let hijack = Hijack::new(ap_ip, Arc::clone(&self.portal_active));
         self.dns_handle = Some(hijack.start_dns_hijack());
 
@@ -150,6 +156,28 @@ impl<'a> WifiManager<'a> {
         if let Some(handle) = self.dns_handle.take() {
             let _ = handle.join();
         }
+
+        // get current config when success connection wifi STA
+        let current_conf = self.wifi.get_configuration()?;
+
+        let sta_config = match current_conf {
+            Configuration::Mixed(sta, _) => sta,
+            Configuration::Client(sta) => sta,
+            _ => ClientConfiguration::default(),
+        };
+
+        self.wifi
+            .set_configuration(&Configuration::Client(sta_config))?;
         Ok(())
+    }
+
+    pub fn get_ip(&self) -> anyhow::Result<Ipv4Addr> {
+        let ip = self.wifi.wifi().ap_netif().get_ip_info()?.ip;
+        Ok(ip)
+    }
+
+    pub fn get_sta_ip(&self) -> anyhow::Result<Ipv4Addr> {
+        let ip = self.wifi.wifi().sta_netif().get_ip_info()?.ip;
+        Ok(ip)
     }
 }

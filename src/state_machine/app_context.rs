@@ -1,7 +1,11 @@
-use embassy_time::Instant;
-use heapless::String;
+use std::time::Duration;
 
-use crate::{error::AppError, net::wifi::WifiManager};
+use embassy_time::Instant;
+
+use crate::{
+    error::AppError,
+    net::{sntp::SntpService, wifi::WifiManager},
+};
 
 pub enum AppMode {
     Init,
@@ -12,7 +16,7 @@ pub enum AppMode {
 pub struct AppContext {
     pub mode: AppMode,
     pub last_sta_retry: Instant,
-    pub qr_text: String<64>,
+    sntp: Option<SntpService>,
 }
 
 impl AppContext {
@@ -20,20 +24,12 @@ impl AppContext {
         Self {
             mode: AppMode::Init,
             last_sta_retry: Instant::now(),
-            qr_text: String::new(),
+            sntp: None,
         }
-    }
-
-    pub fn is_init(&self) -> bool {
-        matches!(self.mode, AppMode::Init)
     }
 
     pub fn is_setup(&self) -> bool {
         matches!(self.mode, AppMode::Setup)
-    }
-
-    pub fn is_running(&self) -> bool {
-        matches!(self.mode, AppMode::Running)
     }
 
     pub fn setup_portal(
@@ -49,6 +45,28 @@ impl AppContext {
         wifi.start_portal(ssid, pass)?;
         self.mode = AppMode::Setup;
         self.last_sta_retry = Instant::now();
+        Ok(())
+    }
+
+    pub fn transition_to_running(&mut self, _: &mut WifiManager) -> Result<(), AppError> {
+        if self.sntp.is_none() {
+            let sntp_service = SntpService::new()?;
+            self.sntp = Some(sntp_service);
+        }
+
+        let synced = self
+            .sntp
+            .as_mut()
+            .expect("SNTP not init")
+            .wait_synced(Duration::from_secs(15));
+
+        if !synced {
+            log::info!("SNTP timeout - continnuing without time");
+        } else {
+            log::info!("SNTP synchronized successfully");
+        }
+        self.mode = AppMode::Running;
+
         Ok(())
     }
 }
