@@ -1,4 +1,5 @@
 // Mods
+mod dns;
 mod error;
 mod net;
 mod state_machine;
@@ -29,39 +30,35 @@ fn main() -> anyhow::Result<()> {
 
     let mut ctx = AppContext::new();
     let ssid = "balming";
-    let pass = "4G79ED807288";
-    if wifi.try_connect_sta(ssid, pass, Duration::from_secs(20))? {
+    let pass = "12345678";
+    let connect = wifi.try_connect_sta(ssid, pass, Duration::from_secs(20))?;
+    if connect {
+        log::info!("Wifi OK");
         ctx.mode = AppMode::Running;
         return Ok(());
     } else {
-        log::info!("Setup portal...");
+        log::info!("STA Failed -> Setup portal");
         ctx.setup_portal(&mut wifi, ssid, pass)?;
     }
 
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        match ctx.mode {
+            AppMode::Setup => {
+                if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
+                    if wifi
+                        .try_connect_sta_while(ssid, pass, Duration::from_secs(20))
+                        .unwrap_or(false)
+                    {
+                        log::info!("STA OK -> Stop portal");
+                        wifi.stop_portal()?;
+                        ctx.mode = AppMode::Running;
+                    }
+                    ctx.last_sta_retry = embassy_time::Instant::now();
+                }
+            }
+            AppMode::Running => {}
+            _ => {}
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
-
-// scan
-//
-// log::info!("Scan networks...");
-//
-// let networks = wifi
-//     .scan()
-//     .context("Error while running the network scan")?;
-//
-// if networks.is_empty() {
-//     log::warn!("No Wifi networks were found within range");
-// } else {
-//     log::info!("Find {} networkds: ", networks.len());
-//     for ap in networks {
-//         log::info!(
-//             "SSID: {:<20} | Signal: {:>3} dBm | Channel: {:>2} | Auth: {:?}",
-//             ap.ssid,
-//             ap.signal_strength,
-//             ap.channel,
-//             ap.auth_method
-//         );
-//     }
-// }

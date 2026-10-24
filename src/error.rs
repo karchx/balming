@@ -10,4 +10,8 @@ pub enum AppError {
     InvalidSsid(String),
     #[error("Invalid password")]
     InvalidPass,
+    #[error("Error from start dns server hijack")]
+    DnsHijack,
+    #[error("Not in portal mode")]
+    NotInPortalMode,
 }
