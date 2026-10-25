@@ -1,6 +1,7 @@
 // Mods
 mod dns;
 mod error;
+mod littlefs;
 mod net;
 mod state_machine;
 mod web_portal;
@@ -19,7 +20,7 @@ use crate::{
     web_portal::server::Server,
 };
 
-fn main() -> anyhow::Result<()> {
+fn setup(ctx: &mut AppContext) -> anyhow::Result<WifiManager<'static>> {
     esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
@@ -29,10 +30,15 @@ fn main() -> anyhow::Result<()> {
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
+    let fs = littlefs::fs::Fs::mount()?;
+    fs.ensure_test_json("/littlefs/test.json")?;
+
+    let content = std::fs::read_to_string("/littlefs/test.json")?;
+    log::info!("Contet {}", content);
+
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
 
-    let mut ctx = AppContext::new();
     let ssid = "balming";
     let pass = "12345678";
     let connect = wifi.try_connect_sta(ssid, pass, Duration::from_secs(20))?;
@@ -46,6 +52,16 @@ fn main() -> anyhow::Result<()> {
 
     let mut server = Server::new();
     server.setup_web()?;
+
+    Ok(wifi)
+}
+
+fn main() -> anyhow::Result<()> {
+    let mut ctx = AppContext::new();
+
+    let ssid = "balming";
+    let pass = "12345678";
+    let mut wifi = setup(&mut ctx)?;
 
     loop {
         match ctx.mode {
