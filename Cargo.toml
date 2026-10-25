@@ -16,10 +16,6 @@ opt-level = "s"
 [profile.dev]
 debug = true    # Symbols are nice, and they don't increase the size on Flash
 opt-level = "z"
-[patch.crates-io]
-esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf.git" }
-esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf.git" }
-esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf.git" }
 
 [dependencies]
 log = "0.4"
@@ -33,3 +29,6 @@ embassy-time = { version = "0.5", features = ["generic-queue-8"] }
 
 [build-dependencies]
 embuild = "0.33.5"
+
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "joltwallet/littlefs", version = "1.23.1" }
