@@ -8,7 +8,6 @@ mod net;
 mod state_machine;
 mod web_portal;
 // End mods
-
 use std::time::{Duration, Instant};
 
 use anyhow::{self, Context};
@@ -18,7 +17,8 @@ use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use net::wifi::WifiManager;
 
 use crate::{
-    control::chip_info::ChipInfo,
+    config::AppConfig,
+    control::{chip_info::ChipInfo, config::ControlConfig},
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
 };
@@ -26,6 +26,8 @@ use crate::{
 struct SetupResult {
     wifi_manager: WifiManager<'static>,
     chip_info: ChipInfo,
+    control: ControlConfig,
+    server: Server<'static>,
 }
 
 fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
@@ -41,21 +43,17 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
 
     let fs = littlefs::fs::Fs::mount()?;
 
-    let cfg = config::AppConfig::load(fs.base)?;
-    log::info!("ssid: {}", cfg.wifi_ssid);
+    let cfg = AppConfig::load(fs.base)?;
 
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
-
-    let ssid = "balming";
-    let pass = "12345678";
-    let connect = wifi.try_connect_sta(ssid, pass, Duration::from_secs(20))?;
+    let connect = wifi.try_connect_sta(&cfg.wifi_ssid, &cfg.wifi_pass, Duration::from_secs(20))?;
     if connect {
         log::info!("Wifi OK");
         ctx.transition_to_running(&mut wifi)?;
     } else {
         log::info!("STA Failed -> Setup portal");
-        ctx.setup_portal(&mut wifi, ssid, pass)?;
+        ctx.setup_portal(&mut wifi, &cfg.wifi_ssid, &cfg.wifi_pass)?;
     }
 
     let mut server = Server::new();
@@ -64,18 +62,21 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     Ok(SetupResult {
         wifi_manager: wifi,
         chip_info,
+        control: ControlConfig::from_loaded(cfg, fs.base),
+        server,
     })
 }
 
 fn main() -> anyhow::Result<()> {
     let mut ctx = AppContext::new();
 
-    let ssid = "balming";
-    let pass = "12345678";
     let SetupResult {
         mut wifi_manager,
         chip_info,
+        control,
+        server: _server,
     } = setup(&mut ctx)?;
+    // let (tx, rx) = std::sync::mpsc::channel::<Cmd>();
 
     let mut last_temp_log = Instant::now();
 
@@ -88,7 +89,11 @@ fn main() -> anyhow::Result<()> {
             AppMode::Setup => {
                 if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
                     if wifi_manager
-                        .try_connect_sta_while(ssid, pass, Duration::from_secs(15))
+                        .try_connect_sta_while(
+                            &control.cfg.wifi_ssid,
+                            &control.cfg.wifi_pass,
+                            Duration::from_secs(15),
+                        )
                         .unwrap_or(false)
                     {
                         log::info!("STA OK -> Stop portal");
