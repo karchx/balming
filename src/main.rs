@@ -9,7 +9,7 @@ mod state_machine;
 mod web_portal;
 // End mods
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{self, Context};
 use esp_idf_hal::peripherals::Peripherals;
@@ -18,11 +18,17 @@ use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use net::wifi::WifiManager;
 
 use crate::{
+    control::chip_info::ChipInfo,
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
 };
 
-fn setup(ctx: &mut AppContext) -> anyhow::Result<WifiManager<'static>> {
+struct SetupResult {
+    wifi_manager: WifiManager<'static>,
+    chip_info: ChipInfo,
+}
+
+fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
@@ -31,6 +37,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<WifiManager<'static>> {
     let peripherals = Peripherals::take()?;
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
+    let chip_info = ChipInfo::new(peripherals.temp_sensor)?;
 
     let fs = littlefs::fs::Fs::mount()?;
 
@@ -54,7 +61,10 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<WifiManager<'static>> {
     let mut server = Server::new();
     server.setup_web()?;
 
-    Ok(wifi)
+    Ok(SetupResult {
+        wifi_manager: wifi,
+        chip_info,
+    })
 }
 
 fn main() -> anyhow::Result<()> {
@@ -62,19 +72,28 @@ fn main() -> anyhow::Result<()> {
 
     let ssid = "balming";
     let pass = "12345678";
-    let mut wifi = setup(&mut ctx)?;
+    let SetupResult {
+        mut wifi_manager,
+        chip_info,
+    } = setup(&mut ctx)?;
+
+    let mut last_temp_log = Instant::now();
 
     loop {
+        if last_temp_log.elapsed() >= Duration::from_secs(60) {
+            chip_info.chip_info_log()?;
+            last_temp_log = Instant::now();
+        }
         match ctx.mode {
             AppMode::Setup => {
                 if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
-                    if wifi
+                    if wifi_manager
                         .try_connect_sta_while(ssid, pass, Duration::from_secs(15))
                         .unwrap_or(false)
                     {
                         log::info!("STA OK -> Stop portal");
-                        wifi.stop_portal()?;
-                        ctx.transition_to_running(&mut wifi)?;
+                        wifi_manager.stop_portal()?;
+                        ctx.transition_to_running(&mut wifi_manager)?;
                     }
                     ctx.last_sta_retry = embassy_time::Instant::now();
                 }
