@@ -32,13 +32,4 @@ impl Fs {
 
         MountedLittlefs::mount(littlefs, BASE).map_err(Into::into)
     }
-
-    pub fn ensure_test_json(&self, path: &str) -> Result<()> {
-        if fs::metadata(path).is_err() {
-            let data = r#"{"version":1, "events":[]}"#;
-            fs::write(path, data)?;
-        }
-
-        Ok(())
-    }
 }

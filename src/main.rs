@@ -1,4 +1,6 @@
 // Mods
+mod config;
+mod control;
 mod dns;
 mod error;
 mod littlefs;
@@ -31,10 +33,9 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<WifiManager<'static>> {
     let nvs = EspDefaultNvsPartition::take()?;
 
     let fs = littlefs::fs::Fs::mount()?;
-    fs.ensure_test_json("/littlefs/test.json")?;
 
-    let content = std::fs::read_to_string("/littlefs/test.json")?;
-    log::info!("Contet {}", content);
+    let cfg = config::AppConfig::load(fs.base)?;
+    log::info!("ssid: {}", cfg.wifi_ssid);
 
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
