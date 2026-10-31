@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use esp_idf_svc::sys::{esp, esp_littlefs_format};
 use esp_idf_svc::{fs::littlefs::Littlefs, io::vfs::MountedLittlefs};
-use std::fs;
 
 const PARTITION: &str = "ffat";
 const BASE: &str = "/littlefs";

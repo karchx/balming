@@ -8,7 +8,10 @@ mod net;
 mod state_machine;
 mod web_portal;
 // End mods
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use anyhow::{self, Context};
 use esp_idf_hal::peripherals::Peripherals;
@@ -26,7 +29,7 @@ use crate::{
 struct SetupResult {
     wifi_manager: WifiManager<'static>,
     chip_info: ChipInfo,
-    control: ControlConfig,
+    control: Arc<Mutex<ControlConfig>>,
     server: Server<'static>,
 }
 
@@ -44,6 +47,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     let fs = littlefs::fs::Fs::mount()?;
 
     let cfg = AppConfig::load(fs.base)?;
+    let control = Arc::new(Mutex::new(ControlConfig::from_loaded(cfg.clone(), fs.base)));
 
     let mut wifi = WifiManager::new(peripherals.modem, sys_loop, nvs)
         .context("The Wifi driver could not be initialize")?;
@@ -56,13 +60,13 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
         ctx.setup_portal(&mut wifi, &cfg.wifi_ssid, &cfg.wifi_pass)?;
     }
 
-    let mut server = Server::new();
+    let mut server = Server::new(Arc::clone(&control));
     server.setup_web()?;
 
     Ok(SetupResult {
         wifi_manager: wifi,
         chip_info,
-        control: ControlConfig::from_loaded(cfg, fs.base),
+        control,
         server,
     })
 }
@@ -88,12 +92,15 @@ fn main() -> anyhow::Result<()> {
         match ctx.mode {
             AppMode::Setup => {
                 if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
+                    let (ssid, pass) = {
+                        let ctrl = control.lock().unwrap();
+                        (ctrl.cfg.wifi_ssid.clone(), ctrl.cfg.wifi_pass.clone())
+                    };
+
+                    log::info!("SSID IN CONFIG: {}", ssid);
+
                     if wifi_manager
-                        .try_connect_sta_while(
-                            &control.cfg.wifi_ssid,
-                            &control.cfg.wifi_pass,
-                            Duration::from_secs(15),
-                        )
+                        .try_connect_sta_while(&ssid, &pass, Duration::from_secs(15))
                         .unwrap_or(false)
                     {
                         log::info!("STA OK -> Stop portal");
