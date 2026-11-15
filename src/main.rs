@@ -27,6 +27,7 @@ use crate::{
 };
 
 struct SetupResult {
+    fs: littlefs::fs::Fs,
     wifi_manager: WifiManager<'static>,
     chip_info: ChipInfo,
     control: Arc<Mutex<ControlConfig>>,
@@ -68,6 +69,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
         chip_info,
         control,
         server,
+        fs: fs,
     })
 }
 
@@ -79,6 +81,7 @@ fn main() -> anyhow::Result<()> {
         chip_info,
         control,
         server: _server,
+        fs: _fs,
     } = setup(&mut ctx)?;
     // let (tx, rx) = std::sync::mpsc::channel::<Cmd>();
 

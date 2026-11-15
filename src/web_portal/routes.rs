@@ -23,37 +23,50 @@ pub fn register_routes(
         .fn_handler(
             "/api/wifi",
             Method::Post,
-            move |req| -> anyhow::Result<()> {
-                let uri = req.uri();
+            move |mut req| -> anyhow::Result<()> {
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 256];
 
-                let query = uri.split('?').nth(1).unwrap_or("");
-                let s = query.split('&').find_map(|param| param.strip_prefix("s="));
-                let p = query.split('&').find_map(|param| param.strip_prefix("p="));
-
-                if s.is_none() || p.is_none() {
-                    let mut response = req.into_response(400, Some("text/plain"), &[])?;
-                    response.write_all(b"SSID required")?;
-                    return Ok(());
-                }
-
-                let ssid_value = s.unwrap().to_string();
-                let pass_value = p.unwrap().to_string();
-
-                {
-                    let mut ctrl = control_cfg.lock().unwrap();
-
-                    match ctrl.set_wifi(&ssid_value, &pass_value) {
-                        Ok(true) => log::info!("Wifi saved..."),
-                        Ok(false) => log::info!("Missing SSID"),
-                        Err(e) => log::error!("Error saved wifi {:?}", e),
+                loop {
+                    match req.read(&mut tmp) {
+                        Ok(0) => break,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                        Err(_) => break,
                     }
                 }
 
-                let mut response = req.into_ok_response()?;
+                let body = String::from_utf8_lossy(&buf);
 
-                let msg = format!("ok - connecting to {}", ssid_value);
-                response.write_all(msg.as_bytes())?;
+                let mut ssid = None;
+                let mut pass = None;
+                for pair in body.split('&') {
+                    if let Some((k, v)) = pair.split_once('=') {
+                        let decoded = urlencoding::decode(v).unwrap_or_else(|_| v.into());
+                        match k {
+                            "s" => ssid = Some(decoded.into_owned()),
+                            "p" => pass = Some(decoded.into_owned()),
+                            _ => {}
+                        }
+                    }
+                }
 
+                let Some(ssid) = ssid.filter(|s| !s.trim().is_empty()) else {
+                    let mut resp = req.into_response(400, Some("text/plain"), &[])?;
+                    resp.write_all(b"SSID required")?;
+                    return Ok(());
+                };
+                let pass = pass.unwrap_or_default();
+                {
+                    let mut ctrl = control_cfg.lock().unwrap();
+                    match ctrl.set_wifi(&ssid, &pass) {
+                        Ok(true) => log::info!("WIFI saved ssid='{}'", ssid),
+                        Ok(false) => log::warn!("SSID empty after trim"),
+                        Err(e) => log::error!("save failed: {e:?}"),
+                    }
+                }
+                let mut resp = req.into_ok_response()?;
+                let msg = format!("ok - connecting to {}", ssid);
+                resp.write_all(msg.as_bytes())?;
                 Ok(())
             },
         )
