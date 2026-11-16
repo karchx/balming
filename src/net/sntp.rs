@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use esp_idf_svc::mdns::EspMdns;
 use esp_idf_svc::sntp::{EspSntp, SyncStatus};
 
 use crate::error::AppError;
