@@ -1,10 +1,13 @@
-use std::time::Duration;
+use std::{
+    sync::mpsc::{channel, Receiver, Sender},
+    time::Duration,
+};
 
 use embassy_time::Instant;
 
 use crate::{
     error::AppError,
-    net::{sntp::SntpService, wifi::WifiManager},
+    net::{sntp::SntpService, telegram::AppEvent, wifi::WifiManager},
 };
 
 pub enum AppMode {
@@ -17,14 +20,19 @@ pub struct AppContext {
     pub mode: AppMode,
     pub last_sta_retry: Instant,
     sntp: Option<SntpService>,
+    pub event_rx: Receiver<AppEvent>,
+    pub event_tx: Sender<AppEvent>,
 }
 
 impl AppContext {
     pub fn new() -> Self {
+        let (tx, rx) = channel::<AppEvent>();
         Self {
             mode: AppMode::Init,
             last_sta_retry: Instant::now(),
             sntp: None,
+            event_rx: rx,
+            event_tx: tx,
         }
     }
 

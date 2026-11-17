@@ -22,6 +22,7 @@ use net::wifi::WifiManager;
 use crate::{
     config::AppConfig,
     control::{chip_info::ChipInfo, config::ControlConfig},
+    net::telegram::{spawn_telegram_worker, AppEvent},
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
 };
@@ -83,9 +84,9 @@ fn main() -> anyhow::Result<()> {
         server: _server,
         fs: _fs,
     } = setup(&mut ctx)?;
-    // let (tx, rx) = std::sync::mpsc::channel::<Cmd>();
 
     let mut last_temp_log = Instant::now();
+    let mut telegram_spawned = false;
 
     loop {
         if last_temp_log.elapsed() >= Duration::from_secs(60) {
@@ -113,7 +114,26 @@ fn main() -> anyhow::Result<()> {
                     ctx.last_sta_retry = embassy_time::Instant::now();
                 }
             }
-            AppMode::Running => {}
+            AppMode::Running => {
+                if !telegram_spawned {
+                    let (token, chat_id) = ("TOKE".into(), 0);
+
+                    log::info!("Init worker telegram...");
+                    spawn_telegram_worker(token, chat_id, ctx.event_tx.clone());
+                    telegram_spawned = true;
+                }
+
+                while let Ok(event) = ctx.event_rx.try_recv() {
+                    match event {
+                        AppEvent::TelegramCommand(cmd) => {
+                            log::info!("Command telegram: {}", cmd);
+                        }
+                        AppEvent::WeatherUpdated { temp } => {
+                            log::info!("Updated... {}", temp);
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         std::thread::sleep(Duration::from_millis(100));
