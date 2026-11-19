@@ -18,15 +18,14 @@ impl<'a> Server<'a> {
     }
 
     pub fn setup_web(&mut self) -> Result<(), AppError> {
-        let mut server =
-            EspHttpServer::new(&HttpConfig::default()).map_err(|_| AppError::DnsHijack)?;
+        let mut server = EspHttpServer::new(&HttpConfig {
+            stack_size: 12288,
+            ..Default::default()
+        })
+        .map_err(|_| AppError::DnsHijack)?;
 
         register_routes(&mut server, Arc::clone(&self.control))?;
         self.http = Some(server);
         Ok(())
     }
-
-    // pub fn stop_server(mut self) {
-    //     self.http.take();
-    // }
 }

@@ -3,7 +3,11 @@ use std::sync::{Arc, Mutex};
 use esp_idf_hal::io::Write;
 use esp_idf_svc::http::{server::EspHttpServer, Method};
 
-use crate::{control::config::ControlConfig, error::AppError, web_portal::dash::DASH_HTML};
+use crate::{
+    control::{config::ControlConfig, logs},
+    error::AppError,
+    web_portal::dash::DASH_HTML,
+};
 
 pub fn register_routes(
     server: &mut EspHttpServer,
@@ -18,6 +22,17 @@ pub fn register_routes(
             Ok(())
         })
         .map_err(|_| AppError::RegisterRoute("index route".into()))?;
+
+    server
+        .fn_handler("/api/logs", Method::Get, |req| -> anyhow::Result<()> {
+            let body = logs::logs_text();
+            let mut response =
+                req.into_response(200, Some("OK"), &[("Content-Type", "text/plain")])?;
+
+            response.write_all(body.as_bytes())?;
+            Ok(())
+        })
+        .map_err(|_| AppError::RegisterRoute("api logs route".into()))?;
 
     server
         .fn_handler(

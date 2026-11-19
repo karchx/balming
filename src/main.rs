@@ -21,7 +21,7 @@ use net::wifi::WifiManager;
 
 use crate::{
     config::AppConfig,
-    control::{chip_info::ChipInfo, config::ControlConfig},
+    control::{chip_info::ChipInfo, config::ControlConfig, logs},
     net::telegram::{spawn_telegram_worker, AppEvent},
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
@@ -127,6 +127,7 @@ fn main() -> anyhow::Result<()> {
                     match event {
                         AppEvent::TelegramCommand(cmd) => {
                             log::info!("Command telegram: {}", cmd);
+                            logs::log_line(cmd.as_str());
                         }
                         AppEvent::WeatherUpdated { temp } => {
                             log::info!("Updated... {}", temp);
