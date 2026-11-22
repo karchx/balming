@@ -1,6 +1,7 @@
 // Mods
 mod config;
 mod control;
+mod display;
 mod dns;
 mod error;
 mod littlefs;
@@ -42,6 +43,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     let peripherals = Peripherals::take()?;
+    display::test_red_screen(peripherals.pins)?;
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
     let chip_info = ChipInfo::new(peripherals.temp_sensor)?;
