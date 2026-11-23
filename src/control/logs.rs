@@ -1,4 +1,4 @@
-use std::sync::{LazyLock, Mutex};
+use std::sync::Mutex;
 
 use heapless::String;
 

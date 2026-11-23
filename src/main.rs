@@ -10,7 +10,7 @@ mod state_machine;
 mod web_portal;
 // End mods
 use std::{
-    sync::{Arc, Mutex},
+    sync::{mpsc::Sender, Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -22,8 +22,9 @@ use net::wifi::WifiManager;
 
 use crate::{
     config::AppConfig,
-    control::{chip_info::ChipInfo, config::ControlConfig, logs},
-    net::telegram::{spawn_telegram_worker, AppEvent},
+    control::{chip_info::ChipInfo, config::ControlConfig},
+    display::capture::DisplayCmd,
+    net::telegram::{spawn_telegram_worker, AppEvent, TgCommand},
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
 };
@@ -34,6 +35,7 @@ struct SetupResult {
     chip_info: ChipInfo,
     control: Arc<Mutex<ControlConfig>>,
     server: Server<'static>,
+    display_tx: Sender<DisplayCmd>,
 }
 
 fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
@@ -43,7 +45,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     let peripherals = Peripherals::take()?;
-    display::test_red_screen(peripherals.pins)?;
+    let display_tx = display::capture::spawn_display_worker(peripherals.pins)?;
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
     let chip_info = ChipInfo::new(peripherals.temp_sensor)?;
@@ -73,6 +75,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
         control,
         server,
         fs: fs,
+        display_tx,
     })
 }
 
@@ -85,6 +88,7 @@ fn main() -> anyhow::Result<()> {
         control,
         server: _server,
         fs: _fs,
+        display_tx,
     } = setup(&mut ctx)?;
 
     let mut last_temp_log = Instant::now();
@@ -118,18 +122,28 @@ fn main() -> anyhow::Result<()> {
             }
             AppMode::Running => {
                 if !telegram_spawned {
-                    let (token, chat_id) = ("TOKE".into(), 0);
+                    let (token, chat_id) = {
+                        let ctrl = control.lock().unwrap();
+                        (ctrl.cfg.bot_token.clone(), ctrl.cfg.allow_chat_id.clone())
+                    };
 
                     log::info!("Init worker telegram...");
-                    spawn_telegram_worker(token, chat_id, ctx.event_tx.clone());
+                    let _ = spawn_telegram_worker(token, chat_id, ctx.event_tx.clone());
                     telegram_spawned = true;
                 }
 
                 while let Ok(event) = ctx.event_rx.try_recv() {
                     match event {
                         AppEvent::TelegramCommand(cmd) => {
-                            log::info!("Command telegram: {}", cmd);
-                            logs::log_line(cmd.as_str());
+                            log::info!("Command telegram: {:?}", cmd);
+                            match cmd {
+                                TgCommand::Test { .. } => {
+                                    let _ = display_tx.send(DisplayCmd::TestRed);
+                                }
+                                TgCommand::Stop => {
+                                    let _ = display_tx.send(DisplayCmd::Stop);
+                                }
+                            }
                         }
                         AppEvent::WeatherUpdated { temp } => {
                             log::info!("Updated... {}", temp);

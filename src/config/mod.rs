@@ -9,13 +9,18 @@ use serde::{Deserialize, Serialize};
 pub struct AppConfig {
     pub wifi_ssid: String,
     pub wifi_pass: String,
+    pub bot_token: String,
+    pub allow_chat_id: i64,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
+        let parse_allow_chat_id = defaults::ALLOW_CHAT_ID.parse().unwrap_or(00000);
         Self {
             wifi_ssid: defaults::WIFI_SSID.into(),
             wifi_pass: defaults::WIFI_PASSWORD.into(),
+            bot_token: defaults::BOT_TOKEN.into(),
+            allow_chat_id: parse_allow_chat_id,
         }
     }
 }
@@ -24,6 +29,8 @@ impl Default for AppConfig {
 struct ConfigFile {
     ssid: Option<String>,
     pass: Option<String>,
+    token: Option<String>,
+    chat: Option<i64>,
 }
 
 impl AppConfig {
@@ -42,6 +49,12 @@ impl AppConfig {
         }
         if let Some(v) = d.pass {
             cfg.wifi_pass = v;
+        }
+        if let Some(v) = d.token {
+            cfg.bot_token = v;
+        }
+        if let Some(v) = d.chat {
+            cfg.allow_chat_id = v;
         }
 
         Ok(cfg)

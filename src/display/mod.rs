@@ -3,6 +3,8 @@ use esp_idf_hal::{
     gpio::{PinDriver, Pins},
 };
 
+pub mod capture;
+
 pub fn test_red_screen(pins: Pins) -> anyhow::Result<()> {
     let mut r1 = PinDriver::output(pins.gpio4)?;
     let mut g1 = PinDriver::output(pins.gpio5)?;
