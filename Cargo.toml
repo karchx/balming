@@ -36,3 +36,4 @@ embuild = "0.33.5"
 
 [[package.metadata.esp-idf-sys.extra_components]]
 remote_component = { name = "joltwallet/littlefs", version = "1.23.1" }
+component_dirs = ["components/hub75_bridge"]

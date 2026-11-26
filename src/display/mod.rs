@@ -1,76 +1,39 @@
-use esp_idf_hal::{
-    delay::Ets,
-    gpio::{PinDriver, Pins},
-};
+use anyhow::bail;
 
 pub mod capture;
+pub mod ffi;
 
-pub fn test_red_screen(pins: Pins) -> anyhow::Result<()> {
-    let mut r1 = PinDriver::output(pins.gpio4)?;
-    let mut g1 = PinDriver::output(pins.gpio5)?;
-    let mut b1 = PinDriver::output(pins.gpio6)?;
-    let mut r2 = PinDriver::output(pins.gpio7)?;
-    let mut g2 = PinDriver::output(pins.gpio15)?;
-    let mut b2 = PinDriver::output(pins.gpio16)?;
+pub struct Display {
+    double_buff: bool,
+}
 
-    let mut a = PinDriver::output(pins.gpio17)?;
-    let mut b = PinDriver::output(pins.gpio18)?;
-    let mut c = PinDriver::output(pins.gpio8)?;
-    let mut d = PinDriver::output(pins.gpio9)?;
-    let mut e = PinDriver::output(pins.gpio10)?;
+impl Display {
+    pub fn new(double_buff: bool) -> anyhow::Result<Self> {
+        let cfg = ffi::Hub75Config {
+            r1: 4,
+            g1: 5,
+            b1: 6,
+            r2: 7,
+            g2: 15,
+            b2: 16,
+            a: 17,
+            b: 18,
+            c: 8,
+            d: 9,
+            e: 10,
+            clk: 11,
+            lat: 12,
+            oe: 13,
+            width: 64,
+            height: 64,
+            double_buff,
+        };
 
-    let mut clk = PinDriver::output(pins.gpio11)?;
-    let mut lat = PinDriver::output(pins.gpio12)?;
-    let mut oe = PinDriver::output(pins.gpio13)?;
-
-    r1.set_high()?;
-    r2.set_high()?;
-    g1.set_low()?;
-    g2.set_low()?;
-    b1.set_low()?;
-    b2.set_low()?;
-    oe.set_high()?;
-
-    loop {
-        for row in 0u8..32 {
-            for _ in 0..64 {
-                clk.set_high()?;
-                clk.set_low()?;
-            }
-
-            oe.set_high()?;
-
-            if (row & 0x01) != 0 {
-                a.set_high()?;
-            } else {
-                a.set_low()?;
-            }
-            if (row & 0x02) != 0 {
-                b.set_high()?;
-            } else {
-                b.set_low()?;
-            }
-            if (row & 0x04) != 0 {
-                c.set_high()?;
-            } else {
-                c.set_low()?;
-            }
-            if (row & 0x08) != 0 {
-                d.set_high()?;
-            } else {
-                d.set_low()?;
-            }
-            if (row & 0x10) != 0 {
-                e.set_high()?;
-            } else {
-                e.set_low()?;
-            }
-
-            lat.set_high()?;
-            lat.set_low()?;
-            oe.set_low()?;
-
-            Ets::delay_us(50);
+        let ok = unsafe { ffi::begin(&cfg) };
+        if !ok {
+            bail!("Failed init HUB75 DMA");
         }
+
+        Ok(Self { double_buff })
     }
 }
