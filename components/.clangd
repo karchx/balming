@@ -1,0 +1,4 @@
+CompileFlags:
+  Add:
+    - -I./ESP32-HUB75-MatrixPanel-DMA/src
+    - -DNO_GFX=1

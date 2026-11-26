@@ -21,4 +21,9 @@ pub struct Hub75Config {
 
 unsafe extern "C" {
     pub fn begin(cfg: *const Hub75Config) -> bool;
+    pub fn draw_pixel(x: i16, y: i16, color: u16);
+    pub fn fill_screen(color: u16);
+    pub fn set_brightness8(brightness: u8);
+    pub fn flip_dma_buffer();
+    pub fn get_refresh_rate() -> i32;
 }

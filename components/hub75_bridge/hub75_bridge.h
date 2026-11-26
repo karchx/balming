@@ -16,6 +16,11 @@ typedef struct {
 } hub75_config_t;
 
 bool begin(const hub75_config_t *cfg);
+void draw_pixel(int16_t x, int16_t y, uint16_t color);
+void fill_screen(uint16_t color);
+void set_brightness8(uint8_t brightness);
+void flip_dma_buffer();
+int get_refresh_rate(void);
 
 #ifdef __cplusplus
 }

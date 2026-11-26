@@ -23,7 +23,7 @@ use net::wifi::WifiManager;
 use crate::{
     config::AppConfig,
     control::{chip_info::ChipInfo, config::ControlConfig},
-    display::capture::DisplayCmd,
+    display::DisplayCmd,
     net::telegram::{spawn_telegram_worker, AppEvent, TgCommand},
     state_machine::app_context::{AppContext, AppMode},
     web_portal::server::Server,
@@ -45,7 +45,7 @@ fn setup(ctx: &mut AppContext) -> anyhow::Result<SetupResult> {
     esp_idf_svc::log::EspLogger::initialize_default();
 
     let peripherals = Peripherals::take()?;
-    let display_tx = display::capture::spawn_display_worker(peripherals.pins)?;
+    let display_tx = display::spawn_display_worker(true)?;
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
     let chip_info = ChipInfo::new(peripherals.temp_sensor)?;
