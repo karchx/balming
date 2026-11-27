@@ -6,6 +6,7 @@ use std::{
 use std::time::Instant;
 
 use crate::{
+    control::time,
     error::AppError,
     net::{sntp::SntpService, telegram::AppEvent, wifi::WifiManager},
 };
@@ -57,6 +58,7 @@ impl AppContext {
     }
 
     pub fn transition_to_running(&mut self, _: &mut WifiManager) -> Result<(), AppError> {
+        time::set_timezone(c"CST6");
         if self.sntp.is_none() {
             let sntp_service = SntpService::new()?;
             self.sntp = Some(sntp_service);

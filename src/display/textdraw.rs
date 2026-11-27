@@ -1,7 +1,7 @@
 use embedded_graphics::{
     geometry::Point,
     mono_font::{
-        ascii::{FONT_5X7, FONT_6X10, FONT_9X15},
+        ascii::{FONT_10X20, FONT_5X7, FONT_6X10, FONT_9X15},
         MonoFont, MonoTextStyle,
     },
     pixelcolor::Rgb565,
@@ -16,6 +16,7 @@ pub enum TextSize {
     Small, // 1 in GFX
     Medium,
     Large, // 2 in GFX
+    LargeX,
 }
 
 impl TextSize {
@@ -24,6 +25,7 @@ impl TextSize {
             TextSize::Small => &FONT_5X7,
             TextSize::Medium => &FONT_6X10,
             TextSize::Large => &FONT_9X15,
+            TextSize::LargeX => &FONT_10X20,
         }
     }
 }

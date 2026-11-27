@@ -1,4 +1,4 @@
-mod defaults;
+pub mod defaults;
 
 use std::{fs, path::Path};
 

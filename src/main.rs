@@ -141,7 +141,7 @@ fn main() -> anyhow::Result<()> {
                                     let _ = display_tx.send(DisplayCmd::TestRed);
                                 }
                                 TgCommand::Stop => {
-                                    let _ = display_tx.send(DisplayCmd::Clock);
+                                    let _ = display_tx.send(DisplayCmd::Stop);
                                 }
                             }
                         }

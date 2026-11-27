@@ -1,7 +1,12 @@
-use crate::display::{
-    capture::Capture,
-    lang_data::{tk, TextKey},
-    textdraw::TextSize,
+use crate::{
+    config::defaults,
+    control::time,
+    display::{
+        capture::Capture,
+        lang_data::{tk, TextKey},
+        scene::ClockView,
+        textdraw::TextSize,
+    },
 };
 use anyhow::bail;
 use embedded_graphics::{
@@ -15,6 +20,7 @@ use esp_idf_hal::task::thread::ThreadSpawnConfiguration;
 use std::{
     convert::Infallible,
     sync::mpsc::{self, Receiver, Sender},
+    time::{Duration, Instant},
 };
 
 pub mod capture;
@@ -34,6 +40,12 @@ pub const C_RED: u16 = rgb565(255, 0, 0);
 
 pub enum DisplayCmd {
     TestRed,
+    Stop,
+}
+
+pub enum DisplayMod {
+    Boot,
+    Test,
     Clock,
 }
 
@@ -44,8 +56,6 @@ pub struct Display {
 
 impl Display {
     pub fn new(double_buff: bool) -> anyhow::Result<Self> {
-        let width = 64;
-        let height = 64;
         let cfg = ffi::Hub75Config {
             r1: 4,
             g1: 5,
@@ -61,8 +71,8 @@ impl Display {
             clk: 11,
             lat: 12,
             oe: 13,
-            width: width,
-            height: height,
+            width: defaults::PANEL_W,
+            height: defaults::PANEL_H,
             double_buff,
             shift_driver: 0, // PANEL_DRIVERS
             latch_blanking: 2,
@@ -79,7 +89,7 @@ impl Display {
 
         Ok(Self {
             double_buff,
-            capture: Capture::new(width, height),
+            capture: Capture::new(defaults::PANEL_W, defaults::PANEL_H),
         })
     }
 
@@ -132,6 +142,11 @@ impl DrawTarget for Display {
         }
         Ok(())
     }
+
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        self.fill_screen(color.into_storage());
+        Ok(())
+    }
 }
 
 pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayCmd>> {
@@ -147,6 +162,11 @@ pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayC
     .set()?;
 
     std::thread::spawn(move || {
+        let frame_time = Duration::from_millis(50); // 20 FPs
+        let mut next_frame = Instant::now();
+        let mut mode = DisplayMod::Boot;
+        let mut clock = ClockView::new(true);
+
         let mut display = match Display::new(double_buff) {
             Ok(d) => d,
             Err(e) => {
@@ -166,18 +186,43 @@ pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayC
             TextSize::Small,
             Rgb565::WHITE,
         );
+
         display.present();
 
-        while let Ok(cmd) = rx.recv() {
-            match cmd {
-                DisplayCmd::TestRed => {
-                    log::info!("Display: Initialize test_red_screen");
+        loop {
+            loop {
+                let wait = next_frame.saturating_duration_since(Instant::now());
+
+                match rx.recv_timeout(wait) {
+                    Ok(cmd) => match cmd {
+                        DisplayCmd::TestRed => mode = DisplayMod::Test,
+                        DisplayCmd::Stop => mode = DisplayMod::Clock,
+                    },
+                    Err(mpsc::RecvTimeoutError::Timeout) => break, // drawing
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+            }
+
+            next_frame += frame_time;
+            if Instant::now() > next_frame {
+                next_frame = Instant::now() + frame_time;
+            }
+
+            let rendered = match mode {
+                DisplayMod::Test => {
                     display.fill_screen(C_RED);
-                    display.present();
+                    true
                 }
-                DisplayCmd::Clock => {
-                    log::info!("Display: Stopped");
+                DisplayMod::Clock => {
+                    let t = time::new_local();
+                    clock.render(&mut display, t.hour, t.min, t.sec);
+                    true
                 }
+                DisplayMod::Boot => false,
+            };
+
+            if rendered {
+                display.present();
             }
         }
     });
