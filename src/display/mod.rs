@@ -1,11 +1,27 @@
-use crate::display::capture::Capture;
+use crate::display::{
+    capture::Capture,
+    lang_data::{tk, TextKey},
+    textdraw::TextSize,
+};
 use anyhow::bail;
+use embedded_graphics::{
+    draw_target::DrawTarget,
+    geometry::{OriginDimensions, Size},
+    pixelcolor::{IntoStorage, Rgb565, RgbColor},
+    Pixel,
+};
 use esp_idf_hal::cpu::Core;
 use esp_idf_hal::task::thread::ThreadSpawnConfiguration;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::{
+    convert::Infallible,
+    sync::mpsc::{self, Receiver, Sender},
+};
 
 pub mod capture;
 pub mod ffi;
+pub mod lang_data;
+pub mod scene;
+pub mod textdraw;
 
 // helpers
 pub const fn rgb565(r: u8, g: u8, b: u8) -> u16 {
@@ -14,12 +30,11 @@ pub const fn rgb565(r: u8, g: u8, b: u8) -> u16 {
 
 pub const C_BLACK: u16 = 0x0000;
 pub const C_RED: u16 = rgb565(255, 0, 0);
-pub const C_TIME: u16 = rgb565(255, 255, 255);
 // end helpers
 
 pub enum DisplayCmd {
     TestRed,
-    Stop,
+    Clock,
 }
 
 pub struct Display {
@@ -49,6 +64,12 @@ impl Display {
             width: width,
             height: height,
             double_buff,
+            shift_driver: 0, // PANEL_DRIVERS
+            latch_blanking: 2,
+            clkphase: false,
+            color_depth: 8,
+            i2s_hz: 16000000, // 16MHz
+            min_refresh_rate: 100,
         };
 
         let ok = unsafe { ffi::begin(&cfg) };
@@ -90,12 +111,35 @@ impl Display {
     }
 }
 
+impl OriginDimensions for Display {
+    fn size(&self) -> Size {
+        Size::new(64, 64)
+    }
+}
+
+impl DrawTarget for Display {
+    type Color = Rgb565;
+    type Error = Infallible;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        for Pixel(coord, color) in pixels {
+            if coord.x >= 0 && coord.y >= 0 && coord.x < 64 && coord.y < 64 {
+                self.draw_pixel(coord.x as i16, coord.y as i16, color.into_storage());
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayCmd>> {
     let (tx, rx): (Sender<DisplayCmd>, Receiver<DisplayCmd>) = mpsc::channel();
 
     ThreadSpawnConfiguration {
         name: Some(c"hub75_worker"),
-        stack_size: 4096,
+        stack_size: 8192,
         priority: 5,
         pin_to_core: Some(Core::Core1),
         ..Default::default()
@@ -114,7 +158,14 @@ pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayC
         log::info!("[panel] {} Hz scan", display.refresh_rate());
         display.set_brightness8(100);
         display.fill_screen(C_BLACK);
-        // draw hello
+        textdraw::draw_text(
+            &mut display,
+            1,
+            12,
+            tk(TextKey::PanellHello),
+            TextSize::Small,
+            Rgb565::WHITE,
+        );
         display.present();
 
         while let Ok(cmd) = rx.recv() {
@@ -124,10 +175,8 @@ pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayC
                     display.fill_screen(C_RED);
                     display.present();
                 }
-                DisplayCmd::Stop => {
+                DisplayCmd::Clock => {
                     log::info!("Display: Stopped");
-                    display.fill_screen(C_BLACK);
-                    display.present();
                 }
             }
         }

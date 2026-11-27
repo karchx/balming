@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use embassy_time::Instant;
+use std::time::Instant;
 
 use crate::{
     error::AppError,

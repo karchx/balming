@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
         }
         match ctx.mode {
             AppMode::Setup => {
-                if ctx.last_sta_retry.elapsed() > embassy_time::Duration::from_secs(30) {
+                if ctx.last_sta_retry.elapsed() > Duration::from_secs(30) {
                     let (ssid, pass) = {
                         let ctrl = control.lock().unwrap();
                         (ctrl.cfg.wifi_ssid.clone(), ctrl.cfg.wifi_pass.clone())
@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
                         wifi_manager.stop_portal()?;
                         ctx.transition_to_running(&mut wifi_manager)?;
                     }
-                    ctx.last_sta_retry = embassy_time::Instant::now();
+                    ctx.last_sta_retry = Instant::now();
                 }
             }
             AppMode::Running => {
@@ -141,7 +141,7 @@ fn main() -> anyhow::Result<()> {
                                     let _ = display_tx.send(DisplayCmd::TestRed);
                                 }
                                 TgCommand::Stop => {
-                                    let _ = display_tx.send(DisplayCmd::Stop);
+                                    let _ = display_tx.send(DisplayCmd::Clock);
                                 }
                             }
                         }

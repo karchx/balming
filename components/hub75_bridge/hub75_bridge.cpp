@@ -16,7 +16,11 @@ extern "C" {
 
         HUB75_I2S_CFG mxconfig(cfg->width, cfg->height, 1, pins);
         mxconfig.double_buff = cfg->double_buff;
-        mxconfig.clkphase = false;
+        mxconfig.latch_blanking   = cfg->latch_blanking;
+        mxconfig.clkphase = cfg->clkphase;
+        mxconfig.i2sspeed         = (HUB75_I2S_CFG::clk_speed)cfg->i2s_hz;
+        mxconfig.min_refresh_rate = cfg->min_refresh_rate;
+        mxconfig.setPixelColorDepthBits(cfg->color_depth);
 
         dma_display = new MatrixPanel_I2S_DMA(mxconfig);
 
@@ -51,7 +55,6 @@ extern "C" {
     void set_brightness8(uint8_t brightness) {
         if (dma_display) dma_display->setBrightness8(brightness);
     }
-
     
     void flip_dma_buffer() {
         if (dma_display) dma_display->flipDMABuffer();

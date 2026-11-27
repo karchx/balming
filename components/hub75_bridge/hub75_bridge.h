@@ -13,6 +13,12 @@ typedef struct {
     uint16_t width;
     uint16_t height;
     bool double_buff;
+    uint8_t shift_driver;      // 0 = SHIFTREG (default)
+    uint8_t latch_blanking;
+    bool clkphase;
+    uint8_t color_depth;
+    uint32_t i2s_hz;
+    uint16_t min_refresh_rate;
 } hub75_config_t;
 
 bool begin(const hub75_config_t *cfg);

@@ -17,6 +17,12 @@ pub struct Hub75Config {
     pub width: u16,
     pub height: u16,
     pub double_buff: bool,
+    pub shift_driver: u8,
+    pub latch_blanking: u8,
+    pub clkphase: bool,
+    pub color_depth: u8,
+    pub i2s_hz: u32, // 10000000 (10 MHz)
+    pub min_refresh_rate: u16,
 }
 
 unsafe extern "C" {
