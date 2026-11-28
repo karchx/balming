@@ -36,6 +36,10 @@ pub const fn rgb565(r: u8, g: u8, b: u8) -> u16 {
 
 pub const C_BLACK: u16 = 0x0000;
 pub const C_RED: u16 = rgb565(255, 0, 0);
+
+pub const fn color565(r: u8, g: u8, b: u8) -> Rgb565 {
+    Rgb565::new(r >> 3, g >> 2, b >> 3)
+}
 // end helpers
 
 pub enum DisplayCmd {
@@ -162,7 +166,8 @@ pub fn spawn_display_worker(double_buff: bool) -> anyhow::Result<Sender<DisplayC
     .set()?;
 
     std::thread::spawn(move || {
-        let frame_time = Duration::from_millis(50); // 20 FPs
+        const RENDER_FPS: u64 = 20;
+        let frame_time = Duration::from_millis(1000 / RENDER_FPS); // 20 FPs
         let mut next_frame = Instant::now();
         let mut mode = DisplayMod::Boot;
         let mut clock = ClockView::new(true);

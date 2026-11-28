@@ -5,7 +5,7 @@ use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::{Rgb565, RgbColor},
     prelude::*,
-    primitives::{Line, PrimitiveStyle, Rectangle},
+    primitives::{Circle, Line, PrimitiveStyle, Rectangle},
     text::{Baseline, Text, TextStyleBuilder},
 };
 use heapless::String;
@@ -13,7 +13,7 @@ use heapless::String;
 use super::Display;
 use crate::{
     config::defaults::{PANEL_H, PANEL_W},
-    display::textdraw::TextSize,
+    display::{color565, textdraw::TextSize},
 };
 
 pub struct ClockView {
@@ -26,6 +26,69 @@ impl ClockView {
         Self {
             is_24h,
             frame_no: 0,
+        }
+    }
+
+    pub fn draw_ambient(&mut self, display: &mut Display, hour: u8, min: u8, sec: u8) {
+        const TOP: i32 = 22;
+        const BOT: i32 = 45;
+        let mins = (hour as i32) * 60 + (min as i32);
+        let day = mins >= 360 && mins < 1110;
+        let night = hour >= 19 || hour < 5;
+
+        const SUN: Rgb565 = color565(255, 214, 90);
+        const SUNST: Rgb565 = color565(255, 150, 110); // sunset orange
+        const MOON: Rgb565 = color565(225, 228, 240);
+        const STAR: Rgb565 = color565(190, 200, 230);
+        const CATC: Rgb565 = color565(255, 170, 190);
+        const ZZZ: Rgb565 = color565(150, 160, 200);
+
+        let mut cel_x = 0;
+        if day {
+            let p: f32 = (mins as f32 - 360.0) / 750.0;
+            let sx: i32 = 3 + ((p * 57.0) as i32);
+            let sy: i32 = BOT - 3 - ((p * std::f32::consts::PI).sin() * 14.0) as i32;
+            cel_x = sx;
+
+            let color = if mins > 1020 { SUNST } else { SUN };
+            let _ = Circle::with_center(Point::new(sx, sy), 7)
+                .into_styled(PrimitiveStyle::with_fill(color))
+                .draw(display);
+
+            let ray = (self.frame_no / 8) % 2; // gentle ray shimmer
+            if ray == 1 {
+                let sun_raw = SUN.into_storage();
+                display.draw_pixel(sx as i16, (sy - 5) as i16, sun_raw);
+                display.draw_pixel((sx - 5) as i16, sy as i16, sun_raw);
+                display.draw_pixel((sx + 5) as i16, sy as i16, sun_raw);
+                display.draw_pixel(sx as i16, (sy + 5) as i16, sun_raw);
+            }
+        } else {
+            let nm: i32 = if mins > 1140 { mins - 1140 } else { mins + 300 };
+            let p: f32 = nm as f32 / 660.0;
+            let mx: i32 = 3 + ((p * 57.0) as i32);
+            let my: i32 = BOT - 3 - ((p * std::f32::consts::PI).sin() * 14.0) as i32;
+            cel_x = mx;
+            let _ = Circle::with_center(Point::new(mx, my), 7)
+                .into_styled(PrimitiveStyle::with_fill(MOON))
+                .draw(display);
+
+            let _ = Circle::with_center(Point::new(mx + 2, my - 1), 7)
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(display);
+        }
+
+        if night {
+            const SXS: [i16; 12] = [5, 12, 20, 27, 34, 41, 48, 56, 60, 16, 37, 52];
+            const SYS: [i16; 12] = [23, 28, 22, 32, 25, 36, 24, 30, 38, 40, 41, 35];
+            let star_raw = STAR.into_storage();
+
+            for i in 0..12 {
+                let n = ((self.frame_no / 5) + (i as u32) * 3) % 7;
+                if n < 4 {
+                    display.draw_pixel(SXS[i], SYS[i], star_raw);
+                }
+            }
         }
     }
 
@@ -54,12 +117,12 @@ impl ClockView {
         let _ = write!(ms, "{:02}", min);
 
         let hw = (hs.len() as i32) * 10;
-        let colon_w = 6;
-        let mw = 20;
+        let colon_w = 5;
+        let mw = 24;
         let xoff = ((PANEL_W as i32 - (hw + colon_w + mw)) / 2).max(0);
-        let yoff = (PANEL_H as i32 - 20) / 2 - 2;
+        let yoff = 2;
 
-        let char_style = MonoTextStyle::new(TextSize::LargeX.font(), Rgb565::WHITE);
+        let char_style = MonoTextStyle::new(TextSize::LargeX.font(), Rgb565::GREEN);
         let text_style = TextStyleBuilder::new().baseline(Baseline::Top).build();
 
         // Hour and minutes
@@ -74,9 +137,9 @@ impl ClockView {
         .draw(display);
 
         let colon_color = if sec % 2 == 1 {
-            Rgb565::WHITE
+            Rgb565::GREEN
         } else {
-            Rgb565::new(15, 17, 12)
+            Rgb565::new(0, 18, 0)
         };
         let colon_style = PrimitiveStyle::with_fill(colon_color);
         let cx = xoff + hw + 2;
@@ -88,7 +151,7 @@ impl ClockView {
             .draw(display);
 
         // Seconds
-        let comet_y = yoff + 24;
+        let comet_y = yoff + 18;
         if sec > 0 {
             let trail_color = Rgb565::new(13, 13, 10);
             let _ = Line::new(Point::new(2, comet_y), Point::new(2 + sec as i32, comet_y))
@@ -102,6 +165,7 @@ impl ClockView {
             Rgb565::WHITE
         };
         let _ = Pixel(Point::new(2 + sec as i32, comet_y), head_color).draw(display);
+        self.draw_ambient(display, hour, min, sec);
         self.frame_no = self.frame_no.wrapping_add(1);
     }
 }

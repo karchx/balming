@@ -130,6 +130,7 @@ fn main() -> anyhow::Result<()> {
                     log::info!("Init worker telegram...");
                     let _ = spawn_telegram_worker(token, chat_id, ctx.event_tx.clone());
                     telegram_spawned = true;
+                    let _ = display_tx.send(DisplayCmd::Stop);
                 }
 
                 while let Ok(event) = ctx.event_rx.try_recv() {
